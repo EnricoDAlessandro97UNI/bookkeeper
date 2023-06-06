@@ -102,20 +102,104 @@ public class NetworkTopologyImplTests {
         
         @Test
         public void testAddNode() {
-            try {
+        	try {
                 NetworkTopology networkTopology = new NetworkTopologyImpl();
                 Node node = getNodeToBeAdded();
+                int expectedRackNumber = networkTopology.getNumOfRacks() + 1;
                 networkTopology.add(node);
 
                 Set<Node> nodes = networkTopology.getLeaves(this.rack);
                 Assert.assertEquals("Wrong number of leaves detected", this.expectedLeaves, nodes.size());
-                if (!NodeType.NULL.equals(this.nodeType)) Assert.assertTrue("Node should be contained inside the topology", networkTopology.contains(node));
+                if (!NodeType.NULL.equals(this.nodeType)) {
+                	Assert.assertEquals("Number of racks should be increased", expectedRackNumber, networkTopology.getNumOfRacks());
+                	Assert.assertTrue("Node should be contained inside the topology", networkTopology.contains(node));
+                }
             } catch (IllegalArgumentException e) {
                 Assert.assertTrue("IllegalArgumentException should have been thrown", this.expectedException);
             }
         }
     }
     
+    /*
+     * Additional test cases to increase the coverage of the add(node) method
+     * come through the white-box analysis
+     */
+    public static class OtherAddScenariosTests {
+        
+        @Test
+        public void testAddRackAndNonRackSameLevel() {
+            NetworkTopology networkTopology = new NetworkTopologyImpl();
+            Node validNode = null;
+            Node invalidNode = null;
+            try {
+                validNode = new NodeBase("test-node-1", NodeBase.PATH_SEPARATOR_STR + "rack0");
+                invalidNode = new NodeBase("test-node-2", NodeBase.PATH_SEPARATOR_STR + "rack0/sec1");
+                networkTopology.add(validNode);
+            } catch (Exception e) {
+                Assert.fail("This setup phase should not raise an exception");
+            }
+
+            try {
+                networkTopology.add(invalidNode);
+                Assert.fail("An \"InvalidTopologyException\" should be raised");
+            } catch (NetworkTopologyImpl.InvalidTopologyException e) {
+                Assert.assertTrue(true);
+            }
+        }
+        
+        @Test
+        public void testIllegalNetworkLocation() {
+            NetworkTopologyImpl networkTopologyImpl = spy(NetworkTopologyImpl.class);
+            Node node = new NodeBase("test-node", NodeBase.PATH_SEPARATOR_STR + "rack0");
+            when(networkTopologyImpl.getNodeForNetworkLocation(node)).thenReturn(new NodeBase("test-node-2", NodeBase.PATH_SEPARATOR_STR + "rack0"));
+
+            try {
+                networkTopologyImpl.add(node);
+                Assert.fail("An \"IllegalArgumentException\" should be raised");
+            } catch (IllegalArgumentException e) {
+                Assert.assertTrue(true);
+            }
+        }
+        
+        @Test
+        public void testAddTwoTimesSameNode() {
+            NetworkTopology networkTopology = new NetworkTopologyImpl();
+            final String rack = NodeBase.PATH_SEPARATOR_STR + "rack0";
+
+            Node node = new NodeBase("test-node", rack);
+            networkTopology.add(node);
+            int oldSize = networkTopology.getLeaves(rack).size();
+
+            networkTopology.add(node);
+            int newSize = networkTopology.getLeaves(rack).size();
+
+            Assert.assertEquals("The node should not be added the second time", oldSize, newSize);
+        }
+        
+        @Test
+        public void testAddTwoValidNodes() {
+            NetworkTopology networkTopology = new NetworkTopologyImpl();
+
+            Node validNode1 = new NodeBase("test-node-1", NodeBase.PATH_SEPARATOR_STR + "rack0");
+            Node validNode2 = new NodeBase("test-node-2", NodeBase.PATH_SEPARATOR_STR + "rack1");
+
+            networkTopology.add(validNode1);
+            networkTopology.add(validNode2);
+
+            Assert.assertTrue("The node is valid, so it should be inserted (1)", networkTopology.contains(validNode1));
+            Assert.assertTrue("The node is valid, so it should be inserted (2)", networkTopology.contains(validNode2));
+        }
+
+        @Test
+        public void testNodeWithExplicitParent() {
+            Node parent = new NodeBase("parent", NodeBase.PATH_SEPARATOR_STR + "/rack0");
+            Node child = new NodeBase("child", NodeBase.PATH_SEPARATOR_STR + "/rack0", parent, 1);
+            NetworkTopology nt = new NetworkTopologyImpl();
+
+            Assert.assertFalse("This node has not been added", nt.contains(child));
+        }
+        
+    }
     
     /**
      * Test cases that stimulate different types of nodes removal
@@ -211,6 +295,7 @@ public class NetworkTopologyImplTests {
         }
     }
     
+    
     /*
      * Additional test cases to increase the coverage of the remove(node) method
      * come through the white-box analysis
@@ -228,7 +313,24 @@ public class NetworkTopologyImplTests {
             }
         }
         
-    }
+        @Test
+        public void testIfRackNullNumOfRackShouldNotChange() {
+            NetworkTopology networkTopology = spy(NetworkTopologyImpl.class);
+            // Intercept the getNode method and return a new InnerNode
+            // Observe that the inner node is not added to the topology
+            when(networkTopology.getNode(notNull())).thenReturn(new NetworkTopologyImpl.InnerNode("core", NodeBase.PATH_SEPARATOR_STR + "rack0"));
+            
+            Node node = new NodeBase("test-node", NodeBase.PATH_SEPARATOR_STR + "rack0");
+            networkTopology.add(node);
+            
+            int oldNumOfRacks = networkTopology.getNumOfRacks();
+            networkTopology.remove(node);
+            int newNumOfRacks = networkTopology.getNumOfRacks();
+            
+            Assert.assertEquals("Number of racks should not change if rack is not null", oldNumOfRacks, newNumOfRacks);
+        }
+        
+    }    
     
     private enum RemovalTypes {
         INNER,
