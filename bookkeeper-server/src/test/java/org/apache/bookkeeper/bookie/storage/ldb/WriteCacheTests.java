@@ -35,6 +35,7 @@ public class WriteCacheTests {
 		
 		private long ledgerId;
 		private long entryId;
+		private Integer entrySize;
 		private ByteBuf entry;
 		private boolean expected;
 		
@@ -50,8 +51,10 @@ public class WriteCacheTests {
 	        this.expected = expected;
 	        this.ledgerId = ledgerId;
 	        this.entryId = entryId;
-	        if(entrySize != null)
-	            this.entry = Unpooled.wrappedBuffer(new byte[entrySize]);
+	        if(entrySize != null) {
+	        	this.entrySize = entrySize;
+	        	this.entry = Unpooled.wrappedBuffer(new byte[entrySize]);
+	        }
 	        else this.entry = null;
 	        this.existsMaxSegmentSize = existsMaxSegmentSize;
 	    }
@@ -71,9 +74,9 @@ public class WriteCacheTests {
 	        	{  LEDGER_ID,       EXISTING_ENTRY_ID,      null,       	false,   	false  }, 
 	        	
 	        	// entryId non esistente e varianti
-	        	{  LEDGER_ID,       NON_EXISTING_ENTRY_ID,      				1024,       	true,    	false  }, // ok
-	        	{  LEDGER_ID,       NON_EXISTING_ENTRY_ID,      				6*1024,    		false,   	false  },	
-	        	{  LEDGER_ID,       NON_EXISTING_ENTRY_ID,  					null,        	false,  	false  },
+	        	{  LEDGER_ID,       NON_EXISTING_ENTRY_ID,	1024,       	true,    	false  }, // ok
+	        	{  LEDGER_ID,       NON_EXISTING_ENTRY_ID,  6*1024,    		false,   	false  },	
+	        	{  LEDGER_ID,       NON_EXISTING_ENTRY_ID,  null,        	false,  	false  },
 	        	
 	        	// entryId negativo e varianti
 	        	{  LEDGER_ID,      -1,						1024,       	true,    	false  }, // ok, ma non viene fatto un controllo su entryId > 0 
@@ -95,11 +98,14 @@ public class WriteCacheTests {
 	        	
 	        	// for coverage
 	        	{  1,  			    NON_EXISTING_ENTRY_ID,  2*1024,        	false,   	true   }, // jacoco: maxSegSize - localOffset < size
-	        	{  1,  			    NON_EXISTING_ENTRY_ID,  1024,        	true,   	true   }  // jacoco: maxSegSize - localOffset = size
+	        	{  1,  			    NON_EXISTING_ENTRY_ID,  1024,        	true,   	true   }, // jacoco: maxSegSize - localOffset = size
+	        	{  1,  			    NON_EXISTING_ENTRY_ID,  512,        	true,   	true   }, // mutation: maxSegSize - localOffset > size
+	        	{  1,  			    NON_EXISTING_ENTRY_ID,  4*1024,        	true,   	false  }  // mutation: maxCacheSize = size
+	        	
 	        });
 	    }
 
-		@Before
+	    @Before
 		public void setUp() {
 			if (existsMaxSegmentSize) {
 				cache = new WriteCache(UnpooledByteBufAllocator.DEFAULT, MAX_CACHE_SIZE, MAX_SEGMENT_SIZE); 
@@ -120,13 +126,37 @@ public class WriteCacheTests {
 		@Test
 		public void testPut() {
 			boolean actual;
+			long beforeCount = cache.count();
 			try {
-				cache.put(ledgerId, entryId, entry);
-				actual = cache.get(ledgerId, entryId).equals(entry);
+				actual = cache.put(ledgerId, entryId, entry);
+				
+				if (entry != null) { // entry potenzialmente valida
+					if (entrySize <= MAX_CACHE_SIZE) { // entry valida per la dimensione della cache
+						if (existsMaxSegmentSize) { // dimensione del segmento specificata
+							if (entrySize <= MAX_SEGMENT_SIZE) {// entry valida per la dimensione del segmento
+								Assert.assertEquals("Entry should have been added", beforeCount+1, cache.count());
+								Assert.assertEquals(entry, cache.get(ledgerId, entryId));
+							}
+							else { // entry non valida per la dimensione del segmento
+								Assert.assertEquals("Entry should have not been added", beforeCount, cache.count());
+							}
+						}
+						else { // dimensione del segmento non specificata
+							Assert.assertEquals("Entry should have been added", beforeCount+1, cache.count());
+							Assert.assertEquals(entry, cache.get(ledgerId, entryId));
+						}
+					}
+					else { // entry non valida per la dimensione della cache
+						Assert.assertEquals("Entry should have not been added", beforeCount, cache.count());
+					}
+				}
+				
 			} catch (NullPointerException | IllegalArgumentException e) {
 				actual = false;
 			}
+			// if ((entry != null) && cache.count() <= beforeCount) actual = false; 
 			Assert.assertEquals(this.expected, actual);
+		
 		}
 		
 		@After
@@ -136,5 +166,41 @@ public class WriteCacheTests {
 		}
 		
 	}	
+	
+	/*
+	 * Additional test cases to increase mutation
+	 * come through the white-box analysis
+	 */
+	public static class OtherWriteCacheTest {
+		
+		@Test
+		public void testCacheCountAfterTwoValidPut() {
+
+			long firstEntryId = 5;
+			long secondEntryId = 10;
+			
+			ByteBuf firstEntry = Unpooled.wrappedBuffer("first-entry".getBytes());
+			firstEntry.writerIndex(firstEntry.capacity());
+			ByteBuf secondEntry = Unpooled.wrappedBuffer("second-entry".getBytes());
+			secondEntry.writerIndex(secondEntry.capacity());
+			
+			try (WriteCache cache = new WriteCache(UnpooledByteBufAllocator.DEFAULT, MAX_CACHE_SIZE, MAX_SEGMENT_SIZE)) {
+				
+				cache.put(LEDGER_ID, firstEntryId, firstEntry);
+				cache.put(LEDGER_ID, secondEntryId, secondEntry);
+				
+				long afterCount = cache.count();
+			
+				Assert.assertTrue("First entry correctly added", cache.hasEntry(LEDGER_ID, firstEntryId));
+				Assert.assertTrue("Second entry correctly added", cache.hasEntry(LEDGER_ID, secondEntryId));
+				Assert.assertEquals("First entry correctly added", firstEntry, cache.get(LEDGER_ID, firstEntryId));
+				Assert.assertEquals("Second entry correctly added", secondEntry, cache.get(LEDGER_ID, secondEntryId));
+				Assert.assertEquals("Second entry is the last entry added", secondEntry, cache.getLastEntry(LEDGER_ID));
+				Assert.assertEquals("Cache count should be incremented", 2, afterCount);
+			} catch (Exception e) {
+				Assert.fail("No exception should be raised");
+			}
+		}
+	}
 
 }
