@@ -24,6 +24,7 @@ import io.netty.buffer.UnpooledByteBufAllocator;
 public class WriteCacheTests {
 
 	private static final long LEDGER_ID = 0;
+	private static final long NON_EXISTING_LEDGER_ID = 1;
 	private static final long EXISTING_ENTRY_ID = 1;
 	private static final long NON_EXISTING_ENTRY_ID = 0;
 	private static final long MAX_CACHE_SIZE = 4*1024;
@@ -154,7 +155,7 @@ public class WriteCacheTests {
 			} catch (NullPointerException | IllegalArgumentException e) {
 				actual = false;
 			}
-			// if ((entry != null) && cache.count() <= beforeCount) actual = false; 
+
 			Assert.assertEquals(this.expected, actual);
 		
 		}
@@ -203,4 +204,64 @@ public class WriteCacheTests {
 		}
 	}
 
+	@RunWith(Parameterized.class)
+	public static class WriteCacheGetLastEntryTest {
+		
+		private WriteCache cache;
+		private long ledgerId;
+		private ByteBuf expectedEntry;
+		
+		// costruttore
+	    public WriteCacheGetLastEntryTest(long ledgerId, ByteBuf expectedEntry) {
+	        configure(ledgerId, expectedEntry);
+	    }
+
+	    public void configure(long ledgerId, ByteBuf expectedEntry) {
+	        this.ledgerId = ledgerId;
+	        this.expectedEntry = expectedEntry;
+	        if (this.expectedEntry != null)
+	        	this.expectedEntry.writerIndex(expectedEntry.capacity());
+	    }
+
+		@Parameterized.Parameters
+	    public static Collection<?> getTestParameters() {
+			return Arrays.asList(new Object[][] {
+	    		// LEDGER_ID				EXPECTED_ENTRY
+				{  LEDGER_ID, 				Unpooled.wrappedBuffer("test-entry".getBytes())  },
+				{  NON_EXISTING_LEDGER_ID, 	null											 },
+				{ -1,						null										     }
+	        	
+	        });
+	    }
+
+		@Before
+		public void setUp() {
+			try {
+				cache = new WriteCache(UnpooledByteBufAllocator.DEFAULT, MAX_CACHE_SIZE);
+				if (this.expectedEntry != null) 
+					cache.put(LEDGER_ID, EXISTING_ENTRY_ID, expectedEntry);
+			} catch (Exception e) {
+				Assert.fail("The initial state configuration needs to be done");
+			}
+		}
+		
+		@Test
+		public void testGetLastEntry() {
+			ByteBuf actualEntry;
+			try {
+				actualEntry = cache.getLastEntry(ledgerId);
+			} catch (IllegalArgumentException e) { // ledgerId < 0
+				actualEntry = null;
+			}
+			Assert.assertEquals(expectedEntry, actualEntry);
+		}
+		
+		@After
+		public void tearDown() {
+			cache.clear();
+			cache.close();
+		}
+		
+	}	
+	
 }
