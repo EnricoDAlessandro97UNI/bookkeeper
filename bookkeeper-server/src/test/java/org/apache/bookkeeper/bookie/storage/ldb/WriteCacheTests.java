@@ -261,6 +261,74 @@ public class WriteCacheTests {
 			cache.clear();
 			cache.close();
 		}
+	}	
+	
+	@RunWith(Parameterized.class)
+	public static class WriteCacheHasEntryTest {
+		
+		private WriteCache cache;
+		private long ledgerId;
+		private long entryId;
+		private boolean expected;
+		private ByteBuf expectedEntry;
+		
+		// costruttore
+	    public WriteCacheHasEntryTest(long ledgerId, long entryId, boolean expected) {
+	        configure(ledgerId, entryId, expected);
+	    }
+
+	    public void configure(long ledgerId, long entryId, boolean expected) {
+	        this.ledgerId = ledgerId;
+	        this.entryId = entryId;
+	        this.expected = expected;
+	    }
+
+		@Parameterized.Parameters
+	    public static Collection<?> getTestParameters() {
+			return Arrays.asList(new Object[][] {
+	    		// LEDGER_ID				ENTRY_ID				EXPECTED
+				{  LEDGER_ID,				EXISTING_ENTRY_ID,		true  },
+				{  LEDGER_ID, 				NON_EXISTING_ENTRY_ID,	false },
+				{  LEDGER_ID,  	   		   -1,						false },
+				
+				{  NON_EXISTING_LEDGER_ID,	EXISTING_ENTRY_ID,		false },
+				{  NON_EXISTING_LEDGER_ID,	NON_EXISTING_ENTRY_ID,	false },
+				{  NON_EXISTING_LEDGER_ID, -1,						false },
+				
+				{ -1,						EXISTING_ENTRY_ID,		false },
+				{ -1,						NON_EXISTING_ENTRY_ID,	false },
+				{ -1,			   		   -1,						false }
+	        });
+	    }
+
+		@Before
+		public void setUp() {
+			try {
+				cache = new WriteCache(UnpooledByteBufAllocator.DEFAULT, MAX_CACHE_SIZE);
+				this.expectedEntry = Unpooled.wrappedBuffer("test-entry".getBytes());
+				this.expectedEntry.writerIndex(expectedEntry.capacity());
+				cache.put(LEDGER_ID, EXISTING_ENTRY_ID, this.expectedEntry);
+			} catch (Exception e) {
+				Assert.fail("The initial state configuration needs to be done");
+			}
+		}
+		
+		@Test
+		public void testHasEntry() {
+			boolean actual;
+			try {
+				actual = cache.hasEntry(ledgerId, entryId);
+			} catch (IllegalArgumentException e) { // ledgerId < 0
+				actual = false;
+			}
+			Assert.assertEquals(expected, actual);
+		}
+		
+		@After
+		public void tearDown() {
+			cache.clear();
+			cache.close();
+		}
 		
 	}	
 	
