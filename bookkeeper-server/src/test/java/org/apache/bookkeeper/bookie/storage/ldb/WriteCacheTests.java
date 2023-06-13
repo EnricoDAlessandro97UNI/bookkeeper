@@ -64,15 +64,6 @@ public class WriteCacheTests {
 	    public static Collection<?> getTestParameters() {
 			return Arrays.asList(new Object[][] {
 	    		// LEDGER_ID        ENTRY_ID                ENTRY_SIZE		EXPECTED	MAX_SEGMENT_SIZE
-				
-				// configurazione valida
-	        	{  LEDGER_ID,		EXISTING_ENTRY_ID,		1024,			true,    	false  }, // ok
-	        	
-	        	// entry > maxCacheSize
-	        	{  LEDGER_ID,		EXISTING_ENTRY_ID,		6*1024,			false,   	false  }, 
-	        	
-	        	// entry null
-	        	{  LEDGER_ID,       EXISTING_ENTRY_ID,      null,       	false,   	false  }, 
 	        	
 	        	// entryId non esistente e varianti
 	        	{  LEDGER_ID,       NON_EXISTING_ENTRY_ID,	1024,       	true,    	false  }, // ok
@@ -84,11 +75,7 @@ public class WriteCacheTests {
 	        	{  LEDGER_ID,      -1,						6*1024,    		false,   	false  },
 	        	{  LEDGER_ID,      -1,      				null,        	false,   	false  },
 	        	
-	        	// ledgerId negativo e varianti
-	        	{ -1,             	EXISTING_ENTRY_ID,      1024,       	false,   	false  },
-	        	{ -1,             	EXISTING_ENTRY_ID,      6*1024,      	false,   	false  },
-	        	{ -1,  				EXISTING_ENTRY_ID,      null,        	false,   	false  },
-	        	
+	        	// ledgerId negativo e varianti	        	
 	        	{ -1,  	   			NON_EXISTING_ENTRY_ID,  1024,       	false,   	false  },
 	        	{ -1,  	   			NON_EXISTING_ENTRY_ID,  6*1024,      	false,   	false  },
 	        	{ -1,  				NON_EXISTING_ENTRY_ID,  null,        	false,   	false  },
@@ -98,6 +85,19 @@ public class WriteCacheTests {
 	        	{ -1,  			   -1,               		null,        	false,   	false  },
 	        	
 	        	// for coverage
+	        	// configurazione valida
+	        	{  LEDGER_ID,		EXISTING_ENTRY_ID,		1024,			true,    	false  }, // ok
+	        	
+	        	// entry > maxCacheSize
+	        	{  LEDGER_ID,		EXISTING_ENTRY_ID,		6*1024,			false,   	false  }, 
+	        	
+	        	// entry null
+	        	{  LEDGER_ID,       EXISTING_ENTRY_ID,      null,       	false,   	false  }, 
+	        	
+	        	{ -1,             	EXISTING_ENTRY_ID,      1024,       	false,   	false  },
+	        	{ -1,             	EXISTING_ENTRY_ID,      6*1024,      	false,   	false  },
+	        	{ -1,  				EXISTING_ENTRY_ID,      null,        	false,   	false  },
+	        	
 	        	{  1,  			    NON_EXISTING_ENTRY_ID,  2*1024,        	false,   	true   }, // jacoco: maxSegSize - localOffset < size
 	        	{  1,  			    NON_EXISTING_ENTRY_ID,  1024,        	true,   	true   }, // jacoco: maxSegSize - localOffset = size
 	        	{  1,  			    NON_EXISTING_ENTRY_ID,  512,        	true,   	true   }, // mutation: maxSegSize - localOffset > size
